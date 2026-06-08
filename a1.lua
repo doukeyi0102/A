@@ -2,9 +2,36 @@ if not game:IsLoaded() then
     game.Loaded:Wait() 
 end
 
+local function decrypt(bytes)
+    local chars = {}
+    for i = 1, #bytes do chars[i] = string.char(bytes[i]) end
+    return table.concat(chars)
+end
+
+local STR_CONFIG_FILE       = decrypt({68, 111, 117, 65, 70, 75, 95, 67, 111, 110, 102, 105, 103, 46, 106, 115, 111, 110})
+local STR_PICK_WEAPONS      = decrypt({80, 105, 99, 107, 87, 101, 97, 112, 111, 110, 115})
+local STR_SHOOTING_RANGE    = decrypt({83, 104, 111, 111, 116, 105, 110, 103, 82, 97, 110, 103, 101, 71, 117, 105})
+local STR_MAIN_GUI           = decrypt({77, 97, 105, 110, 71, 117, 105})
+local STR_API_URL           = decrypt({104, 116, 116, 112, 115, 58, 47, 47, 103, 97, 109, 101, 115, 46, 114, 111, 98, 108, 111, 120, 46, 99, 111, 109, 47, 118, 49, 47, 103, 97, 109, 101, 115, 47})
+
+local debug_info = debug and debug.info
+local function assert_pure(func)
+    if debug_info then
+        local src = debug_info(func, "s")
+        if src ~= "[C]" then
+            while true do end 
+        end
+    end
+end
+
+pcall(function()
+    assert_pure(game.HttpGet)
+    assert_pure(Instance.new)
+end)
+
 local task_wait, task_spawn, task_delay = task.wait, task.spawn, task.delay
 local math_random = math.random
-local os_clock = os.clock
+local os_clock = os_clock
 local string_find, string_lower = string.find, string.lower
 local pcall, type, ipairs = pcall, type, ipairs
 
@@ -20,8 +47,6 @@ local LocalPlayer = Players.LocalPlayer
 
 local queue_to_teleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport) or nil
 
-local CONFIG_FILE = "DouAFK_Config.json"
-
 local features = {
     AutoWeapon = false,
     AutoJump = false,
@@ -32,22 +57,18 @@ local features = {
 }
 
 local setFps = (type(setfpscap) == "function" and setfpscap) or (type(set_fps_cap) == "function" and set_fps_cap) or nil
-
 local uiRegistry = {}
 
 local function SaveConfig()
     pcall(function()
         if writefile then
             local json = HttpService:JSONEncode(features)
-            writefile(CONFIG_FILE, json)
-            print("[+] DouAFK 配置已即時存檔")
+            writefile(STR_CONFIG_FILE, json)
         end
     end)
 end
 
 local function ApplySettingsBackend()
-    print("[*] 正在將配置套用到後端核心...")
-
     pcall(function()
         RunService:Set3dRenderingEnabled(not features.Disable3D)
     end)
@@ -61,15 +82,12 @@ local function ApplySettingsBackend()
             end
         end)
     end
-
-    print("[+] 配置已成功完全套用！")
 end
 
 local function LoadConfigAndRefreshUI()
-    print("[*] 正在嘗試讀取儲存的配置...")
     local success, hasConfig = pcall(function()
-        if readfile and isfile and isfile(CONFIG_FILE) then
-            local json = readfile(CONFIG_FILE)
+        if readfile and isfile and isfile(STR_CONFIG_FILE) then
+            local json = readfile(STR_CONFIG_FILE)
             local data = HttpService:JSONDecode(json)
             if data then
                 for k, v in pairs(data) do
@@ -82,7 +100,6 @@ local function LoadConfigAndRefreshUI()
     end)
 
     if success and hasConfig then
-        print("[+] 成功載入歷史配置！正在同步 UI 視覺外觀...")
         for featureKey, ui in pairs(uiRegistry) do
             if ui.Type == "Checkbox" then
                 local state = features[featureKey]
@@ -96,26 +113,27 @@ local function LoadConfigAndRefreshUI()
             end
         end
         ApplySettingsBackend()
-    else
-        print("[-] 未找到歷史配置或載入失敗，使用預設設定。")
     end
 end
 
-print("[+] 正在注入 DouAFK 控制台外框...")
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = decrypt({100, 115, 102, 107, 106, 97, 104, 115, 100})
+ScreenGui.ResetOnSpawn = false
 
-for _, oldUiName in ipairs({"DouAFK"}) do
-    local target1 = CoreGui:FindFirstChild(oldUiName)
-    if target1 then target1:Destroy() end
-    local pGui = LocalPlayer:WaitForChild("PlayerGui", 5)
-    local target2 = pGui and pGui:FindFirstChild(oldUiName)
-    if target2 then target2:Destroy() end
+local uiParent = nil
+if gethui then
+    uiParent = gethui()
+elseif CoreGui then
+    uiParent = CoreGui
+else
+    uiParent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DouAFK"
-ScreenGui.ResetOnSpawn = false
-local successRun = pcall(function() ScreenGui.Parent = CoreGui end)
-if not successRun then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+for _, oldUiName in ipairs({"DouAFK", ScreenGui.Name}) do
+    local target1 = uiParent:FindFirstChild(oldUiName)
+    if target1 then target1:Destroy() end
+end
+ScreenGui.Parent = uiParent
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
@@ -337,8 +355,6 @@ local function CreateRetroButton(text, callback)
 end
 
 local function HopToEmptyServer()
-    print("[*] 正在獲取合適的低人數伺服器...")
-
     if features.AutoRunOnHop and queue_to_teleport then
         pcall(function()
             queue_to_teleport([[
@@ -349,7 +365,7 @@ local function HopToEmptyServer()
     end
 
     local success, result = pcall(function()
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+        local url = STR_API_URL .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
         local response = game:HttpGet(url)
         local data = HttpService:JSONDecode(response)
         
@@ -370,10 +386,8 @@ local function HopToEmptyServer()
     end)
     
     if success and result then
-        print("[+] 成功找到目標低人數伺服器 (>1人)，正在傳送...")
         TeleportService:TeleportToPlaceInstance(game.PlaceId, result, LocalPlayer)
     else
-        print("[-] 無法精準篩選特定人數服，執行標準隨機換服...")
         pcall(function()
             TeleportService:Teleport(game.PlaceId, LocalPlayer)
         end)
@@ -392,18 +406,14 @@ CreateRetroSlider("自訂fps限制", 1, 240, "FPSValue", function(v)
 end)
 
 CreateRetroCheckbox("跨服自動運行腳本", "AutoRunOnHop", function(s) 
-    if s and not queue_to_teleport then
-        print("[-] 警告：您的執行器不支援 queue_on_teleport")
-    end
 end)
 
-CreateRetroButton("換到人少伺服器", function()
+CreateRetroButton("換到人少服 (>1人)", function()
     HopToEmptyServer()
 end)
 
 task_delay(3, function()
     LoadConfigAndRefreshUI()
-    print("[+] DouAFK 配置載入線程執行完畢，所有配置已完成背景套用。")
 end)
 
 UserInputService.InputBegan:Connect(function(input, gpe)
@@ -414,7 +424,7 @@ end)
 
 task_spawn(function()
     while true do
-        local randomizedDelay = 0.8 + (math_random(-50, 50) / 1000)
+        local randomizedDelay = 0.731 + (math_random(-120, 140) / 1000)
         task_wait(randomizedDelay)
         
         if features.AutoJump and LocalPlayer then
@@ -423,8 +433,9 @@ task_spawn(function()
                 local hum = char and char:FindFirstChildOfClass("Humanoid")
                 
                 if hum and hum.Health > 0 and VirtualInputManager then
+                    assert_pure(VirtualInputManager.SendKeyEvent)
                     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                    task_wait(0.015 + (math_random(0, 10) / 1000))
+                    task_wait(0.012 + (math_random(0, 15) / 1000))
                     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
                 end
             end)
@@ -437,14 +448,16 @@ task_spawn(function()
     local PlayerGui = LocalPlayer:WaitForChild("PlayerGui", 15)
     if not PlayerGui then return end
 
-    local ShootingRange = PlayerGui:FindFirstChild("ShootingRangeGui")
-    local mainGui = PlayerGui:FindFirstChild("MainGui")
+    local ShootingRange = PlayerGui:FindFirstChild(STR_SHOOTING_RANGE)
+    local mainGui = PlayerGui:FindFirstChild(STR_MAIN_GUI)
     local RemotePath = nil
 
     pcall(function()
         local r = ReplicatedStorage:WaitForChild("Remotes", 3)
         if r then
-            RemotePath = r:WaitForChild("Replication", 2):WaitForChild("Fighter", 2):WaitForChild("PickWeapons", 2)
+            local step1 = r:WaitForChild("Replication", 2)
+            local step2 = step1 and step1:WaitForChild("Fighter", 2)
+            RemotePath = step2 and step2:WaitForChild(STR_PICK_WEAPONS, 2)
         end
     end)
 
@@ -455,11 +468,12 @@ task_spawn(function()
         if not features.AutoWeapon or not RemotePath then return end
         local now = os_clock()
 
-        local dynamicCooldown = 0.11 + (math_random(0, 60) / 1000)
+        local dynamicCooldown = 0.105 + (math_random(0, 75) / 1000)
         if now - lastTrigger < dynamicCooldown then return end
         lastTrigger = now
         
         pcall(function() 
+            assert_pure(RemotePath.FireServer)
             RemotePath:FireServer(WEAPONS) 
         end)
     end
@@ -469,7 +483,7 @@ task_spawn(function()
             if obj:IsA("TextLabel") and obj.Text then
                 local textLower = string_lower(obj.Text)
                 if string_find(textLower, "weapon") then
-                    local simulatedLatency = math_random(10, 30) / 1000
+                    local simulatedLatency = math_random(8, 35) / 1000
                     task_delay(simulatedLatency, trySelect)
                 end
             end
@@ -483,4 +497,8 @@ task_spawn(function()
     end)
 end)
 
-print("[+] DouAFK 已成功運行")
+task_spawn(function()
+    while task_wait(30) do
+        collectgarbage("collect")
+    end
+end)
