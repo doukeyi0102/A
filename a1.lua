@@ -408,7 +408,7 @@ end)
 CreateRetroCheckbox("跨服自動運行腳本", "AutoRunOnHop", function(s) 
 end)
 
-CreateRetroButton("換到人少服 (>1人)", function()
+CreateRetroButton("換到人少服", function()
     HopToEmptyServer()
 end)
 
