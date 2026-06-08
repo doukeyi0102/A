@@ -391,13 +391,13 @@ CreateRetroSlider("自訂fps限制", 1, 240, "FPSValue", function(v)
     if features.LimitFPS and setFps then pcall(function() setFps(v) end) end
 end)
 
-CreateRetroCheckbox("跨服自動運行腳本 (需執行器支援)", "AutoRunOnHop", function(s) 
+CreateRetroCheckbox("跨服自動運行腳本", "AutoRunOnHop", function(s) 
     if s and not queue_to_teleport then
         print("[-] 警告：您的執行器不支援 queue_on_teleport")
     end
 end)
 
-CreateRetroButton("換到人少服 (>1人)", function()
+CreateRetroButton("換到人少伺服器", function()
     HopToEmptyServer()
 end)
 
